@@ -1,18 +1,15 @@
+#[derive(Debug)]
 struct Question {
     id: QuestionId,
     title: String,
     content: String,
     tags: Option<Vec<String>>,
 }
+#[derive(Debug)]
 struct QuestionId(String);
 
 impl Question {
-    fn new(
-        id: QuestionId,
-        title: String,
-        content: String,
-        tags: Option<Vec<String>>,
-    ) -> Self {
+    fn new(id: QuestionId, title: String, content: String, tags: Option<Vec<String>>) -> Self {
         Question {
             id,
             title,
@@ -22,6 +19,31 @@ impl Question {
     }
 }
 
+impl std::fmt::Display for Question {
+    fn fmt (&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        write!(
+            f,
+            "{}, title: {}, content: {}, tags: {:?}",
+            self.id, self.title, self.content, self.tags
+        )
+    }
+}
+
+impl std::fmt::Display for QuestionId {
+    fn fmt (&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        write!(f, "{}", self.0)
+    }
+}
+
 fn main() {
-    println!("Hello, world!");
+    let question = Question::new(
+        QuestionId("1".to_string()),
+        "How to list files in Linux".to_string(),
+        "Hello how to list files in linux in current directory".to_string(),
+        Some(vec!["linux".to_string(), "bash".to_string()]),
+    );
+
+    println!("Question: {}", question);
+
+    
 }
