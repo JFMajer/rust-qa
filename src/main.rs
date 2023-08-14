@@ -1,6 +1,6 @@
 use std::io::{Error, ErrorKind};
 use std::str::FromStr;
-use warp::{Filter, reject::Reject, Rejection, Reply, http::StatusCode};
+use warp::{Filter, reject::Reject, Rejection, Reply, http::StatusCode, http::Method};
 use serde::Serialize;
 
 #[derive(Debug, Serialize)]
@@ -96,6 +96,13 @@ async fn main() {
 
     // println!("Question: {}", question);
 
+    let cors = warp::cors()
+        .allow_any_origin()
+        .allow_header("content-type")
+        .allow_methods(
+            &[Method::PUT, Method::DELETE, Method::GET, Method::POST]
+        );
+
     let get_items = warp::get()
         .and(warp::path("questions"))
         .and(warp::path::end())
@@ -105,7 +112,7 @@ async fn main() {
     let hello = warp::get()
         .map(|| format!("Hello, world!"));
 
-    let routes = get_items;
+    let routes = get_items.with(cors);
 
     warp::serve(routes)
         .run(([127, 0, 0, 1], 3030))
