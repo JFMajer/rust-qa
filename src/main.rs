@@ -2,21 +2,24 @@ use std::hash::Hash;
 use warp::{Filter, reject::Reject, Rejection, Reply, http::StatusCode, http::Method, filters::cors::CorsForbidden};
 use serde::{Serialize, Deserialize};
 use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 #[derive(Debug)]
 struct Pagination {
     start: usize,
     end: usize,
 }
+
 #[derive(Clone)]
 struct Store {
-    questions: HashMap<QuestionId, Question>
+    questions: Arc<RwLock<HashMap<QuestionId, Question>>>
 }
 
 impl Store {
     fn new() -> Self {
         Store {
-            questions: HashMap::new(),
+            questions: Arc::new(RwLock::new(Self::init())),
         }
     }
 
@@ -56,22 +59,28 @@ impl std::fmt::Display for QuestionId {
 async fn get_questions(params: HashMap<String, String>, store: Store) -> Result<impl Reply, Rejection> {
     if !params.is_empty() {
         let pagination = extract_pagination(params)?;
-        let res: Vec<Question> = store.questions.values().cloned().collect();
+        let res: Vec<Question> = store.questions.read().await.values().cloned().collect();
         let res = &res[pagination.start..pagination.end];
         Ok(warp::reply::json(&res))
     } else {
-        let res: Vec<Question> = store.questions.values().cloned().collect();
+        let res: Vec<Question> = store.questions.read().await.values().cloned().collect();
         Ok(warp::reply::json(&res))
     }
 }
 
 async fn return_error(r: Rejection) -> Result<impl Reply, Rejection> {
-    if let Some(error) = r.find::<CorsForbidden>() {
+    if let Some(error) = r.find::<Error>() {
+        Ok(warp::reply::with_status(
+            error.to_string(),
+            StatusCode::RANGE_NOT_SATISFIABLE,
+        ))
+    } else if let Some(error) = r.find::<CorsForbidden>() {
         Ok(warp::reply::with_status(
             error.to_string(),
             StatusCode::FORBIDDEN,
         ))
-    } else {
+    } 
+    else {
         Ok(warp::reply::with_status("Route not found".to_string(), StatusCode::NOT_FOUND,))
     }
 }
