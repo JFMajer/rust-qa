@@ -1,9 +1,13 @@
 use std::hash::Hash;
-use std::str::FromStr;
 use warp::{Filter, reject::Reject, Rejection, Reply, http::StatusCode, http::Method, filters::cors::CorsForbidden};
 use serde::{Serialize, Deserialize};
 use std::collections::HashMap;
 
+#[derive(Debug)]
+struct Pagination {
+    start: usize,
+    end: usize,
+}
 #[derive(Clone)]
 struct Store {
     questions: HashMap<QuestionId, Question>
@@ -48,31 +52,17 @@ impl std::fmt::Display for QuestionId {
     }
 }
 
-impl FromStr for QuestionId {
-    type Err = std::io::Error;
-
-    fn from_str(id: &str) -> Result<Self, Self::Err> {
-        match id.is_empty() {
-            false => Ok(QuestionId(id.to_string())),
-            true => Err(
-                Error::new(ErrorKind::InvalidInput, "QuestionId cannot be empty")
-            ),
-        }
-    }
-}
-
 
 async fn get_questions(params: HashMap<String, String>, store: Store) -> Result<impl Reply, Rejection> {
-    let mut start = 0;
-    if let Some(n) = params.get("start") {
-        start = n.parse::<usize>().expect("Could not parse start");
+    if !params.is_empty() {
+        let pagination = extract_pagination(params)?;
+        let res: Vec<Question> = store.questions.values().cloned().collect();
+        let res = &res[pagination.start..pagination.end];
+        Ok(warp::reply::json(&res))
+    } else {
+        let res: Vec<Question> = store.questions.values().cloned().collect();
+        Ok(warp::reply::json(&res))
     }
-
-    println!("Start is {}", start);
-
-    let res: Vec<Question> = store.questions.values().cloned().collect();
-
-   return Ok(warp::reply::json(&res));
 }
 
 async fn return_error(r: Rejection) -> Result<impl Reply, Rejection> {
@@ -105,6 +95,15 @@ impl std::fmt::Display for Error {
 
 impl Reject for Error {}
 
+fn extract_pagination(params: HashMap<String, String>) -> Result<Pagination, Error> {
+    if params.contains_key("start") && params.contains_key("end") {
+        return Ok(Pagination {
+            start: params.get("start").unwrap().parse::<usize>().map_err(Error::ParseError)?,
+            end: params.get("end").unwrap().parse::<usize>().map_err(Error::ParseError)?,
+        });
+    }
+    Err(Error::MissingParameters)
+}
 
 #[tokio::main]
 async fn main() {
