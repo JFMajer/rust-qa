@@ -1,4 +1,4 @@
-use std::io::{Error, ErrorKind};
+use std::hash::Hash;
 use std::str::FromStr;
 use warp::{Filter, reject::Reject, Rejection, Reply, http::StatusCode, http::Method, filters::cors::CorsForbidden};
 use serde::{Serialize, Deserialize};
@@ -12,7 +12,7 @@ struct Store {
 impl Store {
     fn new() -> Self {
         Store {
-            questions: HashMap::new()
+            questions: HashMap::new(),
         }
     }
 
@@ -62,7 +62,14 @@ impl FromStr for QuestionId {
 }
 
 
-async fn get_questions(store: Store) -> Result<impl Reply, Rejection> {
+async fn get_questions(params: HashMap<String, String>, store: Store) -> Result<impl Reply, Rejection> {
+    let mut start = 0;
+    if let Some(n) = params.get("start") {
+        start = n.parse::<usize>().expect("Could not parse start");
+    }
+
+    println!("Start is {}", start);
+
     let res: Vec<Question> = store.questions.values().cloned().collect();
 
    return Ok(warp::reply::json(&res));
@@ -79,6 +86,26 @@ async fn return_error(r: Rejection) -> Result<impl Reply, Rejection> {
     }
 }
 
+#[derive(Debug)]
+enum Error {
+    ParseError(std::num::ParseIntError),
+    MissingParameters,
+    QuestionNotFound,
+}
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match *self {
+            Error::ParseError(ref err) => write!(f, "Cannot parse parameter: {}", err),
+            Error::MissingParameters => write!(f, "Missing parameter"),
+            Error::QuestionNotFound => write!(f, "Question not found"),
+        }
+    }
+}
+
+impl Reject for Error {}
+
+
 #[tokio::main]
 async fn main() {
 
@@ -92,9 +119,10 @@ async fn main() {
             &[Method::PUT, Method::DELETE, Method::GET, Method::POST]
         );
 
-    let get_items = warp::get()
+    let get_questions = warp::get()
         .and(warp::path("questions"))
         .and(warp::path::end())
+        .and(warp::query())
         .and(store_filter)
         .and_then(get_questions)
         .recover(return_error);
@@ -102,7 +130,7 @@ async fn main() {
     let hello = warp::get()
         .map(|| format!("Hello, world!"));
 
-    let routes = get_items.with(cors);
+    let routes = get_questions.with(cors);
 
     warp::serve(routes)
         .run(([127, 0, 0, 1], 3030))
